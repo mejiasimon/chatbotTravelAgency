@@ -52,6 +52,7 @@ export default function ExploraBot() {
           text: greeting,
           sender: "bot",
           options: user ? ["Destinos populares", "Paquetes turísticos", "Información de viaje"] : undefined,
+          isAI: false, // Initial greeting is not AI-generated
         },
       ])
 
@@ -96,49 +97,26 @@ export default function ExploraBot() {
           text: `¡Un placer conocerte, ${input}! ¿En qué puedo ayudarte hoy? Puedes preguntarme sobre destinos en Colombia, paquetes turísticos, o información práctica para tu viaje.`,
           sender: "bot",
           options: ["Destinos populares", "Paquetes turísticos", "Información de viaje", "Hablar con un agente"],
+          isAI: false, // Welcome message is not AI-generated
         }
         setMessages((prev) => [...prev, welcomeMessage])
       }, 500)
     } else if (purchaseInProgress) {
       handlePurchaseFlow(input)
+    } else if (
+      input.toLowerCase().includes("paquete") ||
+      input.toLowerCase().includes("tour") ||
+      input.toLowerCase().includes("destino") ||
+      input.toLowerCase().includes("lugar")
+    ) {
+      // Show cards for packages or destinations
+      showPackagesOrDestinations(input.toLowerCase())
+    } else if (input.toLowerCase().includes("comprar") || input.toLowerCase().includes("reservar")) {
+      // Handle purchase intent
+      handlePurchaseIntent()
     } else {
-      // Check if the input seems like a question that should be handled by AI
-      if (
-        input.includes("?") ||
-        input.toLowerCase().startsWith("qué") ||
-        input.toLowerCase().startsWith("que") ||
-        input.toLowerCase().startsWith("cómo") ||
-        input.toLowerCase().startsWith("como") ||
-        input.toLowerCase().startsWith("donde") ||
-        input.toLowerCase().startsWith("dónde") ||
-        input.toLowerCase().startsWith("cuándo") ||
-        input.toLowerCase().startsWith("cuando") ||
-        input.toLowerCase().startsWith("por qué") ||
-        input.toLowerCase().startsWith("porque") ||
-        input.toLowerCase().startsWith("cuál") ||
-        input.toLowerCase().startsWith("cual") ||
-        input.toLowerCase().includes("información") ||
-        input.toLowerCase().includes("informacion") ||
-        input.toLowerCase().includes("datos") ||
-        input.toLowerCase().includes("dime") ||
-        input.toLowerCase().includes("explica") ||
-        input.toLowerCase().includes("cuéntame") ||
-        input.toLowerCase().includes("cuentame") ||
-        (user?.role === "admin" &&
-          (input.toLowerCase().includes("privad") ||
-            input.toLowerCase().includes("confidencial") ||
-            input.toLowerCase().includes("interno") ||
-            input.toLowerCase().includes("financier") ||
-            input.toLowerCase().includes("margen") ||
-            input.toLowerCase().includes("ganancia") ||
-            input.toLowerCase().includes("costo") ||
-            input.toLowerCase().includes("proveedor")))
-      ) {
-        handleAIResponse(input)
-      } else {
-        // Handle different user queries with predefined responses
-        handleUserQuery(input.toLowerCase())
-      }
+      // Use AI for most other responses
+      handleAIResponse(input)
     }
 
     // Clear input
@@ -169,7 +147,17 @@ export default function ExploraBot() {
           : await generateRegularResponse(query, packages)
 
       // Replace loading message with AI response
-      setMessages((prev) => prev.map((msg) => (msg.id === loadingMessageId ? { ...msg, text: aiResponse } : msg)))
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === loadingMessageId
+            ? {
+                ...msg,
+                text: aiResponse,
+                options: getRelevantOptions(query),
+              }
+            : msg,
+        ),
+      )
     } catch (error) {
       console.error("Error generating AI response:", error)
 
@@ -177,7 +165,11 @@ export default function ExploraBot() {
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === loadingMessageId
-            ? { ...msg, text: "Lo siento, tuve un problema al generar una respuesta. ¿Puedo ayudarte con algo más?" }
+            ? {
+                ...msg,
+                text: "Lo siento, tuve un problema al generar una respuesta. ¿Puedo ayudarte con algo más?",
+                options: ["Destinos populares", "Paquetes turísticos", "Información de viaje"],
+              }
             : msg,
         ),
       )
@@ -186,31 +178,36 @@ export default function ExploraBot() {
     }
   }
 
-  const handlePurchaseFlow = (input: string) => {
-    if (!selectedPackageId) return
-
-    const selectedPackage = packages.find((p) => p.id === selectedPackageId)
-    if (!selectedPackage) return
-
-    setTimeout(() => {
-      // Simulate purchase confirmation
-      const confirmationMessage: Message = {
-        id: messages.length + 2,
-        text: `¡Excelente! He registrado tu reserva para el paquete "${selectedPackage.name}" para ${input} personas.\n\nEn breve recibirás un correo electrónico con los detalles de tu reserva y las instrucciones para realizar el pago.\n\n¿Puedo ayudarte con algo más?`,
-        sender: "bot",
-        options: ["Ver más paquetes", "Información de viaje", "No, gracias"],
-      }
-      setMessages((prev) => [...prev, confirmationMessage])
-      setPurchaseInProgress(false)
-      setSelectedPackageId(null)
-    }, 1500)
+  // Helper function to get relevant options based on the query
+  const getRelevantOptions = (query: string) => {
+    if (
+      query.toLowerCase().includes("destino") ||
+      query.toLowerCase().includes("lugar") ||
+      query.toLowerCase().includes("visitar")
+    ) {
+      return ["Ver paquetes turísticos", "Información de viaje", "Hablar con un agente"]
+    } else if (
+      query.toLowerCase().includes("paquete") ||
+      query.toLowerCase().includes("tour") ||
+      query.toLowerCase().includes("viaje")
+    ) {
+      return ["Ver destinos populares", "Información de viaje", "Hablar con un agente"]
+    } else if (
+      query.toLowerCase().includes("requisito") ||
+      query.toLowerCase().includes("documento") ||
+      query.toLowerCase().includes("información")
+    ) {
+      return ["Destinos populares", "Paquetes turísticos", "Hablar con un agente"]
+    } else {
+      return ["Destinos populares", "Paquetes turísticos", "Información de viaje"]
+    }
   }
 
-  const handleUserQuery = (query: string) => {
+  const showPackagesOrDestinations = (query: string) => {
     setTimeout(() => {
       let botResponse: Message
 
-      if (query.includes("destino") || query.includes("populares") || query.includes("lugares")) {
+      if (query.includes("destino") || query.includes("lugar")) {
         botResponse = {
           id: messages.length + 2,
           text: "Colombia tiene destinos increíbles para todos los gustos. Aquí te muestro algunos de los más populares:",
@@ -233,8 +230,9 @@ export default function ExploraBot() {
               description: "La ciudad de la eterna primavera con su innovadora transformación urbana.",
             },
           ],
+          isAI: false,
         }
-      } else if (query.includes("paquete") || query.includes("tour") || query.includes("viaje")) {
+      } else {
         botResponse = {
           id: messages.length + 2,
           text: "Tenemos varios paquetes turísticos diseñados para diferentes presupuestos y preferencias:",
@@ -247,94 +245,66 @@ export default function ExploraBot() {
             description: pkg.description.substring(0, 80) + "...",
             price: `$${pkg.price.toLocaleString()} COP`,
           })),
+          isAI: false,
         }
-      } else if (query.includes("comprar") || query.includes("reservar") || query.includes("adquirir")) {
-        if (user && user.role === "regular") {
-          botResponse = {
-            id: messages.length + 2,
-            text: "¡Genial! Para ayudarte a reservar, primero necesito saber qué paquete te interesa. Aquí están nuestras opciones disponibles:",
-            sender: "bot",
-            type: "cards",
-            cards: packages.map((pkg) => ({
-              id: pkg.id,
-              title: pkg.name,
-              image: pkg.image,
-              description: `${pkg.duration} días - Máx. ${pkg.maxPeople} personas`,
-              price: `$${pkg.price.toLocaleString()} COP`,
-            })),
-          }
-        } else {
-          botResponse = {
-            id: messages.length + 2,
-            text: "Para reservar un paquete, necesitas iniciar sesión como usuario regular. ¿Te gustaría que te redirija a la página de inicio de sesión?",
-            sender: "bot",
-            options: ["Ir a iniciar sesión", "No, gracias"],
-          }
-        }
-      } else if (query.includes("reserv") || query.includes("cómo reserv")) {
-        botResponse = {
-          id: messages.length + 2,
-          text: "Para reservar un viaje con Explora Colombia, puedes seguir estos pasos:\n\n1. Selecciona el paquete o destino que te interesa\n2. Llámanos al +57 (601) 123-4567\n3. Escríbenos a reservas@exploracolombia.com\n4. Visita nuestra oficina en Bogotá\n\n¿Te gustaría que te contacte un asesor para ayudarte con tu reserva?",
-          sender: "bot",
-          options: ["Sí, contactar asesor", "No, gracias"],
-        }
-      } else if (query.includes("cancelación") || query.includes("política")) {
-        botResponse = {
-          id: messages.length + 2,
-          text: "Nuestra política de cancelación es la siguiente:\n\n• Cancelación 30+ días antes: reembolso del 90%\n• Cancelación 15-29 días antes: reembolso del 70%\n• Cancelación 7-14 días antes: reembolso del 50%\n• Cancelación menos de 7 días antes: no hay reembolso\n\n¿Necesitas más información sobre nuestras políticas?",
-          sender: "bot",
-          options: ["Términos y condiciones", "Hablar con un agente"],
-        }
-      } else if (query.includes("vacuna") || query.includes("requisito") || query.includes("documento")) {
-        botResponse = {
-          id: messages.length + 2,
-          text: "Para viajar por Colombia, los requisitos varían según tu nacionalidad y las regiones que visites:\n\n• Pasaporte vigente (para extranjeros)\n• No se requieren vacunas obligatorias para la mayoría de las zonas turísticas\n• Para la Amazonía se recomienda vacuna contra la fiebre amarilla\n• Seguro de viaje (recomendado)\n\n¿Quieres información sobre alguna región específica?",
-          sender: "bot",
-          options: ["Amazonía", "Costa Caribe", "Región Andina"],
-        }
-      } else if (query.includes("agente") || query.includes("humano") || query.includes("persona")) {
-        botResponse = {
-          id: messages.length + 2,
-          text: `Entiendo. Te conectaré con uno de nuestros asesores de viaje. Por favor, espera un momento mientras transfiero tu conversación. Un asesor se pondrá en contacto contigo pronto a través de correo electrónico o teléfono. ¿Podrías confirmar tu información de contacto?`,
-          sender: "bot",
-          options: ["Proporcionar información", "Cancelar"],
-        }
-      } else if (query.includes("iniciar sesión") || query.includes("login")) {
-        botResponse = {
-          id: messages.length + 2,
-          text: "Puedes iniciar sesión haciendo clic en el botón 'Iniciar Sesión' en la parte superior de la página. ¿Quieres que te redirija a la página de inicio de sesión?",
-          sender: "bot",
-          options: ["Ir a iniciar sesión", "No, gracias"],
-        }
-      } else if (
-        query.includes("hola") ||
-        query.includes("buenos días") ||
-        query.includes("buenas tardes") ||
-        query.includes("buenas noches")
-      ) {
-        botResponse = {
-          id: messages.length + 2,
-          text: user
-            ? `¡Hola de nuevo, ${user.name}! ¿En qué puedo ayudarte hoy?`
-            : "¡Hola! ¿En qué puedo ayudarte hoy?",
-          sender: "bot",
-          options: ["Destinos populares", "Paquetes turísticos", "Información de viaje", "Hablar con un agente"],
-        }
-      } else if (query.includes("gracias") || query.includes("muchas gracias")) {
-        botResponse = {
-          id: messages.length + 2,
-          text: "¡De nada! Estoy aquí para ayudarte. ¿Hay algo más en lo que pueda asistirte?",
-          sender: "bot",
-          options: ["Destinos populares", "Paquetes turísticos", "Información de viaje", "No, gracias"],
-        }
-      } else {
-        // Fallback to AI response for unrecognized queries
-        handleAIResponse(query)
-        return
       }
 
       setMessages((prev) => [...prev, botResponse])
     }, 1000)
+  }
+
+  const handlePurchaseIntent = () => {
+    if (user && user.role === "regular") {
+      setTimeout(() => {
+        const botResponse: Message = {
+          id: messages.length + 2,
+          text: "¡Genial! Para ayudarte a reservar, primero necesito saber qué paquete te interesa. Aquí están nuestras opciones disponibles:",
+          sender: "bot",
+          type: "cards",
+          cards: packages.map((pkg) => ({
+            id: pkg.id,
+            title: pkg.name,
+            image: pkg.image,
+            description: `${pkg.duration} días - Máx. ${pkg.maxPeople} personas`,
+            price: `$${pkg.price.toLocaleString()} COP`,
+          })),
+          isAI: false,
+        }
+        setMessages((prev) => [...prev, botResponse])
+      }, 1000)
+    } else {
+      setTimeout(() => {
+        const botResponse: Message = {
+          id: messages.length + 2,
+          text: "Para reservar un paquete, necesitas iniciar sesión como usuario regular. ¿Te gustaría que te redirija a la página de inicio de sesión?",
+          sender: "bot",
+          options: ["Ir a iniciar sesión", "No, gracias"],
+          isAI: false,
+        }
+        setMessages((prev) => [...prev, botResponse])
+      }, 1000)
+    }
+  }
+
+  const handlePurchaseFlow = (input: string) => {
+    if (!selectedPackageId) return
+
+    const selectedPackage = packages.find((p) => p.id === selectedPackageId)
+    if (!selectedPackage) return
+
+    setTimeout(() => {
+      // Simulate purchase confirmation
+      const confirmationMessage: Message = {
+        id: messages.length + 2,
+        text: `¡Excelente! He registrado tu reserva para el paquete "${selectedPackage.name}" para ${input} personas.\n\nEn breve recibirás un correo electrónico con los detalles de tu reserva y las instrucciones para realizar el pago.\n\n¿Puedo ayudarte con algo más?`,
+        sender: "bot",
+        options: ["Ver más paquetes", "Información de viaje", "No, gracias"],
+        isAI: false,
+      }
+      setMessages((prev) => [...prev, confirmationMessage])
+      setPurchaseInProgress(false)
+      setSelectedPackageId(null)
+    }, 1500)
   }
 
   const handleOptionClick = (option: string) => {
@@ -352,8 +322,8 @@ export default function ExploraBot() {
       return
     }
 
-    // Process the selected option
-    handleUserQuery(option.toLowerCase())
+    // Process the selected option using AI
+    handleAIResponse(option)
   }
 
   const handlePackageSelect = (packageId: number) => {
@@ -375,6 +345,7 @@ export default function ExploraBot() {
           id: messages.length + 2,
           text: `¡Excelente elección! El paquete "${selectedPackage.name}" incluye:\n\n• ${selectedPackage.duration} días de viaje\n• ${selectedPackage.includes.join("\n• ")}\n\nEl precio es de $${selectedPackage.price.toLocaleString()} COP por persona.\n\n¿Para cuántas personas te gustaría reservar este paquete?`,
           sender: "bot",
+          isAI: false,
         }
         setMessages((prev) => [...prev, purchaseMessage])
         setPurchaseInProgress(true)
@@ -388,6 +359,7 @@ export default function ExploraBot() {
           text: "Para reservar este paquete, necesitas iniciar sesión como usuario regular. ¿Te gustaría que te redirija a la página de inicio de sesión?",
           sender: "bot",
           options: ["Ir a iniciar sesión", "No, gracias"],
+          isAI: false,
         }
         setMessages((prev) => [...prev, loginMessage])
       }, 1000)
@@ -418,7 +390,9 @@ export default function ExploraBot() {
               </div>
               <div>
                 <h3 className="font-bold">Guía ExploraBot</h3>
-                <p className="text-xs">Tu asistente virtual de viajes</p>
+                <p className="text-xs flex items-center">
+                  <Sparkles size={12} className="mr-1" /> Asistente virtual con IA
+                </p>
               </div>
             </div>
             <Button
