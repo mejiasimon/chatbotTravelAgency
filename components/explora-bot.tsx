@@ -8,7 +8,7 @@ import { MessageSquare, Send, X, User, Mic, Sparkles } from "lucide-react"
 import Image from "next/image"
 import { useAuth } from "@/context/auth-context"
 import { usePackages } from "@/context/package-context"
-import { generateAdminResponse, generateRegularResponse } from "@/utils/ai-utils"
+import { useRegularResponse, useAdminResponse } from "@/utils/ai-utils"
 
 type Message = {
   id: number
@@ -33,11 +33,16 @@ export default function ExploraBot() {
   const [askingName, setAskingName] = useState(false)
   const [purchaseInProgress, setPurchaseInProgress] = useState(false)
   const [selectedPackageId, setSelectedPackageId] = useState<number | null>(null)
-  const [isGeneratingAI, setIsGeneratingAI] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const { user } = useAuth()
   const { packages } = usePackages()
+
+  // Usar los hooks personalizados para generar respuestas
+  const { generateResponse: generateRegularResponse, isLoading: isRegularLoading } = useRegularResponse()
+  const { generateResponse: generateAdminResponse, isLoading: isAdminLoading } = useAdminResponse()
+
+  const isGeneratingAI = isRegularLoading || isAdminLoading
 
   // Initial greeting when chat opens
   useEffect(() => {
@@ -137,8 +142,6 @@ export default function ExploraBot() {
       },
     ])
 
-    setIsGeneratingAI(true)
-
     try {
       // Generate AI response based on user role
       const aiResponse =
@@ -173,8 +176,6 @@ export default function ExploraBot() {
             : msg,
         ),
       )
-    } finally {
-      setIsGeneratingAI(false)
     }
   }
 
